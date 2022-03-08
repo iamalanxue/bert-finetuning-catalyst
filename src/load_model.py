@@ -31,6 +31,12 @@ from data import TextClassificationDataset
 # model.load_state_dict(torch.load('logdir/checkpoints/train.2.pth')['state_dict'])
 # model.eval()
 
+def clearConsole():
+    command = 'clear'
+    if os.name in ('nt', 'dos'): 
+        command = 'cls'
+    os.system(command)
+
 MODEL_NAME = 'distilbert-base-uncased'
 
 test_df = pd.read_csv("data/motions_laws/test.csv").fillna('')
@@ -112,5 +118,10 @@ with open(filename, 'r') as csvfile:
                 correct += 1
             c+=1
 
-print(correct/c)
-        
+
+clearConsole()
+print("\n\nAccuracy on Test Set: " + str(correct/c))
+print("----------------")
+print("Total Observations: " + str(c))
+print("Total Correct Observations:" + str(correct))
+print("\n\n")
