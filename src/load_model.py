@@ -37,91 +37,196 @@ def clearConsole():
         command = 'cls'
     os.system(command)
 
-MODEL_NAME = 'distilbert-base-uncased'
-
-test_df = pd.read_csv("data/motions_laws/test.csv").fillna('')
-
-
-test_dataset = TextClassificationDataset(
-    texts=test_df['description'].values.tolist(),
-    labels=None,
-    label_dict=None,
-    max_seq_length=32,
-    model_name=MODEL_NAME
-)
+def guess(path_to_data):
+    '''
+    guesses motion type of each line of data in path_to_data (csv please)
+    '''
 
 
-test_loaders = {
-    "test": DataLoader(dataset=test_dataset,
-                        batch_size=16, 
-                        shuffle=False) 
-}
 
-model = BertForSequenceClassification(pretrained_model_name=MODEL_NAME,
-                                            num_classes=2)
 
-runner = SupervisedRunner(
-    input_key=(
-        "features",
-        "attention_mask"
+
+    MODEL_NAME = 'distilbert-base-uncased'
+
+    test_df = pd.read_csv(path_to_data).fillna('')
+
+
+    test_dataset = TextClassificationDataset(
+        texts=test_df['description'].values.tolist(),
+        labels=None,
+        label_dict=None,
+        max_seq_length=32,
+        model_name=MODEL_NAME
     )
-)
-
-runner.infer(
-    model=model,
-    loaders=test_loaders,
-    callbacks=[
-        CheckpointCallback(
-            resume="logdir/checkpoints/best.pth"
-        ),
-        InferCallback(),
-    ],   
-    verbose=True
-)
 
 
-predicted_probs = runner.callbacks[0].predictions['logits']
-predictions = []
+    test_loaders = {
+        "test": DataLoader(dataset=test_dataset,
+                            batch_size=16, 
+                            shuffle=False) 
+    }
+
+    model = BertForSequenceClassification(pretrained_model_name=MODEL_NAME,
+                                                num_classes=3)
+
+    runner = SupervisedRunner(
+        input_key=(
+            "features",
+            "attention_mask"
+        )
+    )
+
+    runner.infer(
+        model=model,
+        loaders=test_loaders,
+        callbacks=[
+            CheckpointCallback(
+                resume="logdir/checkpoints/best.pth"
+            ),
+            InferCallback(),
+        ],   
+        verbose=True
+    )
+
+
+    predicted_probs = runner.callbacks[0].predictions['logits']
+    predictions = []
 
 
 
 
 
 
-#convert predictions from confidence to T, F
-for pred in predicted_probs:
-    if pred[0] > pred[1]:
-        predictions.append('F')
-    else:
-        predictions.append('T')
 
 
 
+    #convert predictions from confidence to T, F
+    for pred in predicted_probs:
+        max = 0
+        maxidx = 0
+        # print(pred)
+        for i in range(len(pred)):
+            
+            if pred[i] > max:
+                max = pred[i]
+                maxidx = i
+            # print(maxidx)
+            
+        if maxidx == 2: predictions.append("Other")
+        elif maxidx == 1: predictions.append("Motion to Dismiss")        
+        else: predictions.append("Motion for Summary Judgement")
+
+
+    return predictions
+
+
+
+
+print(guess("data/motions_laws/sergio_data.csv"))
+
+
+'''
 ### Calculate accuracy on test set
 import csv
 
-filename = 'data/motions_laws/test.csv'
+filename = 'data/motions_laws/sergio_data.csv'
 # print(len(predictions))
 
 
 with open(filename, 'r') as csvfile:
     datareader = csv.reader(csvfile)
+    total_dismiss = 0
+    total_sumjudge = 0
+    total_other = 0
+    correct_dismiss = 0
+    correct_sumjudge = 0
+    correct_other = 0
+    false_dismiss = 0
+    false_sumjudge = 0
+    false_other = 0
 
+    total_other_guessed = 0
+    total_dismiss_guessed = 0
+    total_sumjudge_guessed = 0    
+    
+    wrong = []
     c=0
     correct=0
     first = True
+
+    # print("HERE!::::!!")
+    # print(predictions)
     for row in datareader:
+        
         if first:
             first=False
         else:
             if row[4] == predictions[c]:
                 correct += 1
+            else:
+                wrong.append(row)
+            
+            if row[4] == 'Other':
+                total_other += 1
+                if row[4] == predictions[c]:
+                    correct_other += 1
+                else:
+                    false_other += 1
+            
+            if row[4] == 'Motion to Dismiss':
+                total_dismiss += 1
+                if row[4] == predictions[c]:
+                    correct_dismiss += 1
+                else:
+                    false_dismiss += 1
+            
+            if row[4] == 'Motion for Summary Judgement':
+                total_sumjudge += 1
+                if row[4] == predictions[c]:
+                    correct_sumjudge += 1
+                else:
+                    false_sumjudge += 1
+
+            if predictions[c] == "Other": total_other_guessed += 1
+            elif predictions[c] == "Motion to Dismiss": total_dismiss_guessed += 1
+            else: total_sumjudge_guessed += 1
+
+
             c+=1
+
+
+
+
+
+
+
+
+
+
+other_precision = correct_other / total_other_guessed
+dismiss_precision = correct_dismiss / total_dismiss_guessed
+sumjudge_precision = correct_sumjudge / total_sumjudge_guessed
+
+other_recall = correct_other / total_other
+dismiss_recall = correct_dismiss / total_dismiss
+sumjudge_recall = correct_sumjudge / total_sumjudge
+
+
+precision = (other_precision + dismiss_precision + sumjudge_precision) / 3
+recall = (other_recall + dismiss_recall + sumjudge_recall) / 3
+
+
+
 
 
 clearConsole()
 print("\n\nAccuracy on Test Set: " + str(correct/c))
+print("Precision: " + str(precision))
+print("Recall: "+ str(recall))
+print("F-Measure: " + str((2*precision*recall)/(precision+recall)))
 print("----------------")
 print("Total Observations: " + str(c))
 print("Total Correct Observations:" + str(correct))
 print("\n\n")
+
+'''
